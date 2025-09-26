@@ -105,7 +105,7 @@ def send_like():
 
     # جلب معلومات اللاعب قبل الإرسال
     try:
-        info_url = f"https://info-self-one.vercel.app/get?uid={player_id}"
+        info_url = f"https://info-six-theta.vercel.app/get?uid={player_id}"
         resp = httpx.get(info_url, timeout=10)
         info_json = resp.json()
         account_info = info_json.get("AccountInfo", {})
