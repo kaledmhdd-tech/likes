@@ -109,9 +109,9 @@ def send_like():
         resp = httpx.get(info_url, timeout=10)
         info_json = resp.json()
         account_info = info_json.get("AccountInfo", {})
-        player_name = account_info.get("AccountName","Unknown")
-        player_uid = account_info.get("accountId",player_id_int)
-        likes_before = account_info.get("AccountLikes",0)
+        player_name = account_info.get("nickname", "Unknown")
+        player_uid = account_info.get("accountId", player_id_int)
+        likes_before = account_info.get("liked", 0)
     except Exception as e:
         return jsonify({"error": f"Error fetching player info: {e}"}), 500
 
@@ -134,7 +134,7 @@ def send_like():
             tokens_dict = token_data.get("tokens", {})
             token_items = list(tokens_dict.items())
             random.shuffle(token_items)
-            token_items = token_items[:500]  # 100 توكن جديدة في كل دورة
+            token_items = token_items[:500]
         except Exception as e:
             return jsonify({"error": f"Failed to fetch tokens: {e}"}), 500
 
@@ -161,17 +161,15 @@ def send_like():
         resp = httpx.get(info_url, timeout=10)
         info_json = resp.json()
         account_info = info_json.get("AccountInfo", {})
-        likes_after = account_info.get("AccountLikes", likes_before)
+        likes_after = account_info.get("liked", likes_before)
     except Exception:
         likes_after = likes_before
 
-    likes_added = likes_after - likes_before  # الفرق الفعلي
+    likes_added = likes_after - likes_before
 
-    # إذا لم يزد اللايكات، نعتبره وصول للحد اليومي
     if likes_added == 0:
         return jsonify({"error": "لقد اضفت لايكات قبل 24 ساعة ✅"}), 200
 
-    # إذا تم إضافة لايكات، نعرض النتائج العادية
     return jsonify({
         "player_id": player_uid,
         "player_name": player_name,
