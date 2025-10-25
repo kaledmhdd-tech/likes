@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 import time
 import threading
+import os
 
 app = Flask(__name__)
 last_sent_cache = {}
@@ -103,6 +104,10 @@ def send_like():
     now = time.time()
     last_sent = last_sent_cache.get(player_id_int, 0)
 
+    # منع الإرسال إذا تم خلال 24 ساعة
+    if now - last_sent < 86400:
+        return jsonify({"error": "لقد اضفت لايكات قبل 24 ساعة ✅"}), 200
+
     # جلب معلومات اللاعب قبل الإرسال
     try:
         info_url = f"https://info-yo1m.onrender.com/get?uid={player_id}&region=ME"
@@ -112,12 +117,8 @@ def send_like():
         player_name = account_info.get("nickname", "Unknown")
         player_uid = account_info.get("accountId", player_id_int)
         likes_before = account_info.get("liked", 0)
-    except Exception as e:
-        return jsonify({"error": f"Error fetching player info: {e}"}), 500
-
-    # منع الإرسال إذا تم خلال 24 ساعة
-    if now - last_sent < 86400:
-        return jsonify({"error": "لقد اضفت لايكات قبل 24 ساعة ✅"}), 200
+    except Exception:
+        return jsonify({"error": "فشل في جلب معلومات اللاعب"}), 500
 
     encrypted_id = Encrypt_ID(player_uid)
     encrypted_api_data = encrypt_api(f"08{encrypted_id}1007")
@@ -127,20 +128,21 @@ def send_like():
     results = []
     failed = []
 
-    # حلقة مستمرة حتى نصل 100 لايك ناجح
-    while likes_sent < 100:
-        try:
-            token_data = httpx.get("https://auto-token-n5t7.onrender.com/api/get_jwt", timeout=50).json()
-            tokens_dict = token_data.get("tokens", {})
-            token_items = list(tokens_dict.items())
-            random.shuffle(token_items)
-            token_items = token_items[:500]
-        except Exception as e:
-            return jsonify({"error": f"Failed to fetch tokens: {e}"}), 500
+    # جلب التوكنات
+    try:
+        token_data = httpx.get("https://auto-token-n5t7.onrender.com/api/get_jwt", timeout=50).json()
+        tokens_dict = token_data.get("tokens", {})
+        token_items = list(tokens_dict.items())
+        random.shuffle(token_items)
+    except Exception:
+        return jsonify({"error": "فشل في جلب التوكنات"}), 500
 
-        with ThreadPoolExecutor(max_workers=100) as executor:
-            futures = {executor.submit(send_like_request, token, TARGET): (uid, token)
-                       for uid, token in token_items}
+    # تقسيم التوكنات إلى دفعات لتجنب استهلاك عالي للموارد
+    batch_size = 50  # عدد التوكنات في كل دفعة
+    for i in range(0, len(token_items), batch_size):
+        batch = token_items[i:i+batch_size]
+        with ThreadPoolExecutor(max_workers=batch_size) as executor:
+            futures = {executor.submit(send_like_request, token, TARGET): (uid, token) for uid, token in batch}
             for future in as_completed(futures):
                 if likes_sent >= 100:
                     break
@@ -152,10 +154,12 @@ def send_like():
                         results.append(res)
                 else:
                     failed.append(res)
+        if likes_sent >= 100:
+            break
 
     last_sent_cache[player_id_int] = now
 
-    # جلب معلومات اللاعب بعد الإرسال
+    # جلب عدد اللايكات بعد الإرسال
     likes_after = likes_before
     try:
         resp = httpx.get(info_url, timeout=10)
@@ -166,7 +170,6 @@ def send_like():
         likes_after = likes_before
 
     likes_added = likes_after - likes_before
-
     if likes_added == 0:
         return jsonify({"error": "لقد اضفت لايكات قبل 24 ساعة ✅"}), 200
 
@@ -182,4 +185,5 @@ def send_like():
     })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
