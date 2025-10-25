@@ -105,7 +105,7 @@ def send_like():
 
     # جلب معلومات اللاعب قبل الإرسال
     try:
-        info_url = f"https://info-six-neon.vercel.app/get?uid={player_id}"
+        info_url = f"https://info-yo1m.onrender.com/get?uid={player_id}&region=ME"
         resp = httpx.get(info_url, timeout=10)
         info_json = resp.json()
         account_info = info_json.get("AccountInfo", {})
